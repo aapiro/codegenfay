@@ -26,20 +26,21 @@ public class ${entityName} {
     </#list>
 
     <#-- Relaciones -->
-<#list relationships as rel>
-    <#if rel.relationshipType??>
-        <#if rel.relationshipType == "OneToOne">
-            // Genera el código para OneToOne
-        <#elseif rel.relationshipType == "OneToMany">
-            // Genera el código para OneToMany
-        <#elseif rel.relationshipType == "ManyToOne">
-            // Genera el código para ManyToOne
-        <#elseif rel.relationshipType == "ManyToMany">
-            // Genera el código para ManyToMany
+<#-- Verificamos que entity y entity.relationships existan -->
+<#if entity?? && entity.relationships??>
+    <#list entity.relationships as rel>
+        <#if rel.relationshipType??>
+            <#if rel.relationshipType == "OneToOne">
+                // lógica para OneToOne
+            <#elseif rel.relationshipType == "OneToMany">
+                // lógica para OneToMany
+            <#elseif rel.relationshipType == "ManyToOne">
+                // lógica para ManyToOne
+            <#elseif rel.relationshipType == "ManyToMany">
+                // lógica para ManyToMany
+            </#if>
         </#if>
-    </#if>
-</#list>
-
-
+    </#list>
+</#if>
     // Getters y Setters
 }

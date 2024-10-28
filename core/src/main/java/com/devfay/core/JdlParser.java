@@ -5,15 +5,14 @@ import lombok.Getter;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Getter
 public class JdlParser {
-    private final Map<String, Map<String, String>> entities = new HashMap<>();
-    private final Map<String, List<Relationship>> relationships = new HashMap<>();
+
+    private final Map<String, EntityDefinition> entities = new HashMap<>();
 
     public void parse(String filePath) throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -23,59 +22,93 @@ public class JdlParser {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
 
+                // Detect entity definition
                 if (line.startsWith("entity")) {
-                    // Parse entity definition
                     String[] parts = line.split(" ");
                     currentEntity = parts[1];
-                    entities.put(currentEntity, new HashMap<>());
-
-                } else if (line.startsWith("relationship")) {
-                    // Parse relationship type and details
-                    String relationshipType = line.split(" ")[1];
-                    line = reader.readLine().trim();
-
-                    String[] parts = line.replace("{", "").replace("}", "").split(" to ");
-                    String fromEntity = parts[0].split("\\{")[0].trim();
-                    String toEntity = parts[1].split("\\{")[0].trim();
-                    String toEntityAttribute = parts[1].contains("{") ? parts[1].split("\\{")[1].replace("}", "").trim() : null;
-
-                    addRelationship(fromEntity, toEntity, toEntityAttribute, relationshipType);
-
-                } else if (currentEntity != null && (line.contains("String") || line.contains("Long") || line.contains("Instant"))) {
-                    // Parse entity attributes
+                    entities.put(currentEntity, new EntityDefinition(currentEntity, new HashMap<>()));
+                }
+                // Detect attribute definitions within an entity block
+                else if (currentEntity != null && (line.contains("String") || line.contains("Long") || line.contains("Instant"))) {
                     String[] parts = line.split(" ");
                     String attributeName = parts[0];
                     String attributeType = parts[1];
-                    entities.get(currentEntity).put(attributeName, attributeType);
-
-                } else if (line.isEmpty()) {
-                    // Reset entity context on blank lines
+                    entities.get(currentEntity).attributes.put(attributeName, attributeType);
+                }
+                // Detect relationship definitions
+                else if (line.startsWith("relationship")) {
+                    parseRelationship(line, reader);
+                }
+                // Reset entity context on empty line
+                else if (line.isEmpty()) {
                     currentEntity = null;
                 }
             }
         }
     }
 
-    private void addRelationship(String fromEntity, String toEntity, String toEntityAttribute, String relationshipType) {
-        if (relationshipType == null || relationshipType.isEmpty()) {
-            throw new IllegalArgumentException("El tipo de relación no puede ser nulo o vacío.");
+    private void parseRelationship(String line, BufferedReader reader) throws IOException {
+        Pattern pattern = Pattern.compile("relationship (OneToOne|OneToMany|ManyToOne|ManyToMany) \\{");
+        Matcher matcher = pattern.matcher(line);
+
+        if (!matcher.find()) {
+            System.out.println("Formato de relación no válido: " + line);
+            return;
         }
-        Relationship relationship = new Relationship(fromEntity, toEntity, toEntityAttribute, relationshipType);
-        relationships.computeIfAbsent(fromEntity, k -> new ArrayList<>()).add(relationship);
+
+        String relationshipType = matcher.group(1);
+        String relationshipLine;
+
+        while ((relationshipLine = reader.readLine()) != null) {
+            relationshipLine = relationshipLine.trim();
+            if (relationshipLine.equals("}")) break;
+
+            // Parse relationship details, extracting attributes and entities
+            Pattern relPattern = Pattern.compile("([\\w]+)\\{?(\\w+)?} to ([\\w]+)\\{?(\\w+)?}");
+            Matcher relMatcher = relPattern.matcher(relationshipLine);
+
+            if (relMatcher.find()) {
+                String fromEntity = relMatcher.group(1);
+                String fromAttribute = relMatcher.group(2) != null ? relMatcher.group(2) : "";
+                String toEntity = relMatcher.group(3);
+                String toAttribute = relMatcher.group(4) != null ? relMatcher.group(4) : "";
+
+                EntityRelationship relationship = new EntityRelationship(fromEntity, toEntity, toAttribute, relationshipType);
+
+                entities.get(fromEntity).addRelationship(relationship);
+            } else {
+                System.out.println("Formato de relación no válido: " + relationshipLine);
+            }
+        }
     }
 
+    // Class for storing entity information
+    public static class EntityDefinition {
+        public final String name;
+        public final Map<String, String> attributes;
+        public final List<EntityRelationship> relationships = new ArrayList<>();
 
-    // Inner class to represent relationships
-    public static class Relationship {
+        public EntityDefinition(String name, Map<String, String> attributes) {
+            this.name = name;
+            this.attributes = attributes;
+        }
+
+        public void addRelationship(EntityRelationship relationship) {
+            relationships.add(relationship);
+        }
+    }
+
+    // Class for storing relationship information
+    public static class EntityRelationship {
         public final String fromEntity;
         public final String toEntity;
-        public final String toEntityAttribute;
+        public final String toAttribute;
         public final String relationshipType;
 
-        public Relationship(String fromEntity, String toEntity, String toEntityAttribute, String relationshipType) {
+        public EntityRelationship(String fromEntity, String toEntity, String toAttribute, String relationshipType) {
             this.fromEntity = fromEntity;
             this.toEntity = toEntity;
-            this.toEntityAttribute = toEntityAttribute;
+            this.toAttribute = toAttribute;
             this.relationshipType = relationshipType;
         }
     }
