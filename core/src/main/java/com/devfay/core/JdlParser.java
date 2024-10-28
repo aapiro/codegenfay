@@ -22,24 +22,20 @@ public class JdlParser {
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
 
-                // Detect entity definition
                 if (line.startsWith("entity")) {
                     String[] parts = line.split(" ");
                     currentEntity = parts[1];
                     entities.put(currentEntity, new EntityDefinition(currentEntity, new HashMap<>()));
                 }
-                // Detect attribute definitions within an entity block
                 else if (currentEntity != null && (line.contains("String") || line.contains("Long") || line.contains("Instant"))) {
                     String[] parts = line.split(" ");
                     String attributeName = parts[0];
                     String attributeType = parts[1];
                     entities.get(currentEntity).attributes.put(attributeName, attributeType);
                 }
-                // Detect relationship definitions
                 else if (line.startsWith("relationship")) {
                     parseRelationship(line, reader);
                 }
-                // Reset entity context on empty line
                 else if (line.isEmpty()) {
                     currentEntity = null;
                 }
@@ -48,7 +44,7 @@ public class JdlParser {
     }
 
     private void parseRelationship(String line, BufferedReader reader) throws IOException {
-        Pattern pattern = Pattern.compile("relationship (OneToOne|OneToMany|ManyToOne|ManyToMany) \\{");
+        Pattern pattern = Pattern.compile("relationship\\s+(OneToOne|OneToMany|ManyToOne|ManyToMany)\\s*\\{");
         Matcher matcher = pattern.matcher(line);
 
         if (!matcher.find()) {
@@ -63,8 +59,7 @@ public class JdlParser {
             relationshipLine = relationshipLine.trim();
             if (relationshipLine.equals("}")) break;
 
-            // Parse relationship details, extracting attributes and entities
-            Pattern relPattern = Pattern.compile("([\\w]+)\\{?(\\w+)?} to ([\\w]+)\\{?(\\w+)?}");
+            Pattern relPattern = Pattern.compile("([\\w]+)\\{?(\\w+)?}?\\s+to\\s+([\\w]+)\\{?(\\w+)?}?");
             Matcher relMatcher = relPattern.matcher(relationshipLine);
 
             if (relMatcher.find()) {
@@ -82,7 +77,6 @@ public class JdlParser {
         }
     }
 
-    // Class for storing entity information
     public static class EntityDefinition {
         public final String name;
         public final Map<String, String> attributes;
@@ -98,7 +92,6 @@ public class JdlParser {
         }
     }
 
-    // Class for storing relationship information
     public static class EntityRelationship {
         public final String fromEntity;
         public final String toEntity;
