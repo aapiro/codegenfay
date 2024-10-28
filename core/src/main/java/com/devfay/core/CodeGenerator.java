@@ -1,5 +1,4 @@
 package com.devfay.core;
-
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import freemarker.template.TemplateException;
@@ -10,7 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -28,14 +27,14 @@ public class CodeGenerator {
         cfg.setDirectoryForTemplateLoading(templateDirectory);
     }
 
-
-    public void generateCode(Map<String, Map<String, String>> entities, String outputDir, String packageName, String templateDir) {
+    public void generateCode(Map<String, Map<String, String>> entities, Map<String, List<JdlParser.Relationship>> relationships, String outputDir, String packageName, String templateDir) {
         entities.forEach((entityName, attributes) -> {
             var model = Map.of(
                     "package", packageName,
                     "entityName", entityName,
                     "entityNameLowerCase", entityName.toLowerCase(),
-                    "attributes", attributes
+                    "attributes", attributes,
+                    "relationships", relationships.getOrDefault(entityName, List.of())
             );
             processTemplates(model, outputDir, entityName, templateDir);
         });
@@ -62,6 +61,7 @@ public class CodeGenerator {
             e.printStackTrace();  // Reemplazar con un logger
         }
     }
+
     private String determineOutputPath(String templateName, String outputDir, String entityName) throws IOException {
         var subDirMap = Map.of(
                 "Repository", "/repository/",
@@ -84,5 +84,4 @@ public class CodeGenerator {
         Files.createDirectories(Paths.get(outputDir + subDir));
         return fullOutputPath;
     }
-
 }
