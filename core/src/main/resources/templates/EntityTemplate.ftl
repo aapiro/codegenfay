@@ -24,14 +24,4 @@ public class ${entityName} implements Serializable {
     private ${attributes[attribute]} ${attribute};
 </#list>
 
-// Getters y Setters
-<#list attributes?keys as attribute>
-    public ${attributes[attribute]} get${attribute?cap_first}() {
-    return ${attribute};
-    }
-
-    public void set${attribute?cap_first}(${attributes[attribute]} ${attribute}) {
-    this.${attribute} = ${attribute};
-    }
-</#list>
 }
