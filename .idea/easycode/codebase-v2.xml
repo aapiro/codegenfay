@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="com.obiscr.chatgpt.settings.EasyCodeState">
+    <option name="projectFiles" value="$PROJECT_DIR$/core/src/main/java/com/devfay/core/CodeGenerator.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/src/main/java/com/devfay/core/CodeGeneratorMain.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/src/main/java/com/devfay/core/CoreApplication.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/src/main/java/com/devfay/core/EntityGenerator.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/src/main/java/com/devfay/core/JdlParser.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/src/test/java/com/devfay/core/CoreApplicationTests.java;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/compose.yaml;/Users/unifay/Documents/playground/ilimitech/codegenfay/core/pom.xml;/Users/unifay/Documents/playground/ilimitech/codegenfay/README.md" />
+  </component>
+</project>
