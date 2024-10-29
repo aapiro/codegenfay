@@ -5,173 +5,133 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.stream.Stream;
 
 public class CodeGenerator {
-    private static final Logger logger = Logger.getLogger(CodeGenerator.class.getName());
+    private final JdlParser parser;
+    private final String templateDir; // Ruta al directorio de plantillas
+    private final String packageName;
 
-    public CodeGenerator() {}
-
-    public void generateCode(Map<String, JdlParser.EntityDefinition> entities, String outputDir, String packageName, String templateDir) {
-        entities.forEach((entityName, entity) -> {
-            Map<String, String> model = new HashMap<>();
-            model.put("package", packageName);
-            model.put("entityName", entityName);
-            model.put("entityNameLowerCase", entityName.toLowerCase());
-            model.put("attributes", generateAttributesSection(entity.attributes));
-            model.put("relationships", generateRelationshipsSection(entity));
-
-            processTemplates(model, outputDir, entityName, templateDir);
-        });
+    public CodeGenerator(JdlParser parser, String templateDir, String packageName) {
+        this.parser = parser;
+        this.templateDir = templateDir;
+        this.packageName = packageName;
     }
 
-    private void processTemplates(Map<String, String> model, String outputDir, String entityName, String templateDir) {
-        try (Stream<Path> paths = Files.list(Paths.get(templateDir))) {
-            paths.filter(path -> path.toString().endsWith(".jft"))
-                    .forEach(path -> processSingleTemplate(path, model, outputDir, entityName));
-        } catch (IOException e) {
-            logger.log(Level.SEVERE, "Error al procesar las plantillas en el directorio: " + templateDir, e);
+    public void generateCode(String outputDir) throws IOException {
+        // Genera entidades, repositorios, servicios y controladores
+        generateEntities(outputDir);
+        // Genera enums además de los otros archivos
+        generateEnums(outputDir);
+    }
+
+    private void generateEntities(String outputDir) throws IOException {
+        for (JdlParser.EntityDefinition entityDef : parser.getEntities().values()) {
+            Map<String, String> model = Map.of(
+                    "package", packageName,  // Ajusta según tu estructura de paquetes
+                    "entityName", entityDef.name,
+                    "entityNameLowerCase", entityDef.name.toLowerCase(),
+                    "attributes", generateAttributes(entityDef),
+                    "relationships", generateRelationships(entityDef)
+            );
+
+            // Procesa plantillas de entidad, repositorio, servicio y controlador
+            processTemplate("EntityTemplate.jft", model, outputDir + "/domain/" + entityDef.name + ".java");
+            processTemplate("RepositoryTemplate.jft", model, outputDir + "/repository/" + entityDef.name + "Repository.java");
+            processTemplate("ServiceTemplate.jft", model, outputDir + "/service/" + entityDef.name + "Service.java");
+            processTemplate("ControllerTemplate.jft", model, outputDir + "/web/rest/" + entityDef.name + "Controller.java");
         }
     }
 
-    private void processSingleTemplate(Path templatePath, Map<String, String> model, String outputDir, String entityName) {
-        try {
-            String templateContent = new String(Files.readAllBytes(templatePath));
-            String filledContent = fillTemplate(templateContent, model);
-            String outputFilePath = determineOutputPath(templatePath.getFileName().toString(), outputDir, entityName);
+    private void generateEnums(String outputDir) throws IOException {
+        for (JdlParser.EnumDefinition enumDef : parser.getEnums().values()) {
+            Map<String, String> model = Map.of(
+                    "package", packageName,
+                    "enumName", enumDef.name,
+                    "enumValues", String.join(", ", enumDef.values)
+            );
 
-            try (FileWriter writer = new FileWriter(outputFilePath)) {
-                writer.write(filledContent);
-                logger.info("Archivo generado: " + outputFilePath);
-            }
-        } catch (IOException e) {
-            logger.log(Level.SEVERE, "Error al procesar la plantilla: " + templatePath.getFileName(), e);
+            // Procesa la plantilla de enum
+            processTemplate("EnumTemplate.jft", model, outputDir + "/domain/" + enumDef.name + ".java");
         }
     }
 
-    private String fillTemplate(String templateContent, Map<String, String> model) {
+    private void processTemplate(String templateName, Map<String, String> model, String outputPath) throws IOException {
+        Path templatePath = Paths.get(templateDir, templateName);
+        String templateContent = new String(Files.readAllBytes(templatePath));
+
+        // Realiza el reemplazo de placeholders en la plantilla
         for (Map.Entry<String, String> entry : model.entrySet()) {
             templateContent = templateContent.replace("${" + entry.getKey() + "}", entry.getValue());
         }
-        return templateContent;
+
+        // Escribe el archivo de salida
+        Files.createDirectories(Paths.get(outputPath).getParent());
+        try (FileWriter writer = new FileWriter(outputPath)) {
+            writer.write(templateContent);
+            System.out.println("Archivo generado: " + outputPath);
+        }
     }
 
-    private String generateAttributesSection(Map<String, String> attributes) {
+    private String generateAttributes(JdlParser.EntityDefinition entityDef) {
         StringBuilder attributesSection = new StringBuilder();
-        attributes.forEach((name, type) ->
+        entityDef.attributes.forEach((name, type) ->
                 attributesSection.append("    private ").append(type).append(" ").append(name).append(";\n"));
         return attributesSection.toString();
     }
 
-    private String generateRelationshipsSection(JdlParser.EntityDefinition entity) {
+    private String generateRelationships(JdlParser.EntityDefinition entityDef) {
         StringBuilder relationshipsSection = new StringBuilder();
-        Set<String> uniqueRelationshipNames = new HashSet<>(); // Almacena los nombres de relaciones únicos
-
-        for (JdlParser.EntityRelationship rel : entity.relationships) {
-            // Usa 'fromAttribute' como nombre si está definido; si no, usa 'toEntity' en minúsculas
+        for (JdlParser.EntityRelationship rel : entityDef.relationships) {
             String fromAttributeName = !rel.fromAttribute.isEmpty() ? rel.fromAttribute : rel.toEntity.toLowerCase();
-
-            // Verifica si el nombre de relación ya fue añadido
-            if (uniqueRelationshipNames.contains(fromAttributeName)) {
-                continue; // Salta esta relación si el nombre ya existe
-            }
-            uniqueRelationshipNames.add(fromAttributeName); // Agrega el nombre al conjunto
-
-            // Obtiene la plantilla de la relación con etiquetas para reemplazar
-            String relationshipCode = getRelationshipTemplate(rel.relationshipType, entity.name.toLowerCase(), fromAttributeName, rel.toEntity);
-            relationshipsSection.append(relationshipCode);
+            relationshipsSection.append(getRelationshipTemplate(rel.relationshipType, entityDef.name.toLowerCase(), fromAttributeName, rel.toEntity));
         }
-
         return relationshipsSection.toString();
     }
 
     private String getRelationshipTemplate(String relationshipType, String entityName, String fromAttributeName, String toEntity) {
-        // Definimos las plantillas de relaciones como cadenas de texto con etiquetas
         String oneToOneTemplate = """
-        @OneToOne
-        @JoinColumn(name = "${fromAttributeName}_id")
-        private ${toEntity} ${fromAttributeName};
+            @OneToOne
+            @JoinColumn(name = "${fromAttributeName}_id")
+            private ${toEntity} ${fromAttributeName};
 
-    """;
+        """;
 
         String oneToManyTemplate = """
-        @OneToMany(mappedBy = "${entityName}")
-        private List<${toEntity}> ${fromAttributeName}s;
+            @OneToMany(mappedBy = "${entityName}")
+            private List<${toEntity}> ${fromAttributeName}s;
 
-    """;
+        """;
 
         String manyToOneTemplate = """
-        @ManyToOne
-        @JoinColumn(name = "${fromAttributeName}_id")
-        private ${toEntity} ${fromAttributeName};
+            @ManyToOne
+            @JoinColumn(name = "${fromAttributeName}_id")
+            private ${toEntity} ${fromAttributeName};
 
-    """;
+        """;
 
         String manyToManyTemplate = """
-        @ManyToMany
-        @JoinTable(
-            name = "${entityName}_${toEntity}",
-            joinColumns = @JoinColumn(name = "${entityName}_id"),
-            inverseJoinColumns = @JoinColumn(name = "${fromAttributeName}_id")
-        )
-        private Set<${toEntity}> ${fromAttributeName}s;
+            @ManyToMany
+            @JoinTable(
+                name = "${entityName}_${toEntity}",
+                joinColumns = @JoinColumn(name = "${entityName}_id"),
+                inverseJoinColumns = @JoinColumn(name = "${fromAttributeName}_id")
+            )
+            private Set<${toEntity}> ${fromAttributeName}s;
 
-    """;
+        """;
 
-        // Selecciona la plantilla adecuada según el tipo de relación
-        String template;
-        switch (relationshipType) {
-            case "OneToOne":
-                template = oneToOneTemplate;
-                break;
-            case "OneToMany":
-                template = oneToManyTemplate;
-                break;
-            case "ManyToOne":
-                template = manyToOneTemplate;
-                break;
-            case "ManyToMany":
-                template = manyToManyTemplate;
-                break;
-            default:
-                template = "";
-                break;
-        }
+        // Selecciona y reemplaza etiquetas en la plantilla de relación
+        String template = switch (relationshipType) {
+            case "OneToOne" -> oneToOneTemplate;
+            case "OneToMany" -> oneToManyTemplate;
+            case "ManyToOne" -> manyToOneTemplate;
+            case "ManyToMany" -> manyToManyTemplate;
+            default -> "";
+        };
 
-        // Llamamos a replacePlaceholders para reemplazar las etiquetas en la plantilla seleccionada
-        return replacePlaceholders(template, Map.of(
-                "fromAttributeName", fromAttributeName,
-                "entityName", entityName,
-                "toEntity", toEntity
-        ));
-    }
-
-    // Método para reemplazar las etiquetas en una plantilla
-    private String replacePlaceholders(String template, Map<String, String> values) {
-        String result = template;
-        for (Map.Entry<String, String> entry : values.entrySet()) {
-            result = result.replace("${" + entry.getKey() + "}", entry.getValue());
-        }
-        return result;
-    }
-    private String determineOutputPath(String templateName, String outputDir, String entityName) throws IOException {
-        String subDir = templateName.contains("Repository") ? "/repository/" :
-                templateName.contains("Service") ? "/service/" :
-                        templateName.contains("Controller") ? "/web/rest/" :
-                                "/domain/";
-        String outputFileName = templateName.contains("Controller") ? entityName + "Controller.java" :
-                templateName.contains("Repository") ? entityName + "Repository.java" :
-                        templateName.contains("Service") ? entityName + "Service.java" :
-                                entityName + ".java";
-
-        String fullOutputPath = outputDir + subDir + outputFileName;
-        Files.createDirectories(Paths.get(outputDir + subDir));
-        return fullOutputPath;
+        return template.replace("${fromAttributeName}", fromAttributeName)
+                .replace("${entityName}", entityName)
+                .replace("${toEntity}", toEntity);
     }
 }

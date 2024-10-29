@@ -1,0 +1,7 @@
+package ${package}.domain;
+
+public enum ${enumName} {
+
+    ${enumValues}
+
+}

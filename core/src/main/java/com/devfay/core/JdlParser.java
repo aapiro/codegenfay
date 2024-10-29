@@ -9,6 +9,7 @@ import java.util.regex.Pattern;
 
 public class JdlParser {
     private final Map<String, EntityDefinition> entities = new HashMap<>();
+    private final Map<String, EnumDefinition> enums = new HashMap<>(); // Mapa para almacenar enums
 
     public void parse(String filePath) throws IOException {
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -20,10 +21,12 @@ public class JdlParser {
 
                 if (line.startsWith("entity")) {
                     currentEntity = parseEntity(line);
-                } else if (currentEntity != null && (line.contains("String") || line.contains("Long") || line.contains("Instant"))) {
+                } else if (currentEntity != null && (line.contains("String") || line.contains("Long") || line.contains("Instant") || line.contains("Language"))) {
                     parseAttribute(currentEntity, line);
                 } else if (line.startsWith("relationship")) {
                     parseRelationship(line, reader);
+                } else if (line.startsWith("enum")) {
+                    parseEnum(line, reader);
                 } else if (line.isEmpty() || line.startsWith("paginate") || line.startsWith("dto") || line.startsWith("service")) {
                     currentEntity = null; // Reset cuando alcanzamos un bloque no relevante
                 }
@@ -46,18 +49,16 @@ public class JdlParser {
     }
 
     private void parseRelationship(String line, BufferedReader reader) throws IOException {
-        String relationshipType = line.split(" ")[1]; // Obtiene el tipo de relación
+        String relationshipType = line.split(" ")[1];
         String relationshipLine;
 
         while ((relationshipLine = reader.readLine()) != null) {
             relationshipLine = relationshipLine.trim();
 
-            // Ignorar líneas vacías, solo `{` o `}`
             if (relationshipLine.isEmpty() || relationshipLine.equals("{") || relationshipLine.equals("}") || relationshipLine.startsWith("//") || relationshipLine.startsWith("/**")) {
                 continue;
             }
 
-            // Patrón para capturar relaciones con atributos opcionales en `{}` y `()`
             Pattern pattern = Pattern.compile("(\\w+)\\{?(\\w+)?(?:\\(([^\\)]+)\\))?\\}? to (\\w+)\\{?(\\w+)?(?:\\(([^\\)]+)\\))?\\}?");
             Matcher matcher = pattern.matcher(relationshipLine);
 
@@ -76,17 +77,47 @@ public class JdlParser {
                 System.out.println("Formato de relación no válido: " + relationshipLine);
             }
 
-            // Detener si encontramos la llave de cierre `}`
             if (relationshipLine.endsWith("}")) {
                 break;
             }
         }
     }
 
+    private void parseEnum(String line, BufferedReader reader) throws IOException {
+        String enumName = line.split(" ")[1]; // Obtiene el nombre del enum
+        EnumDefinition enumDefinition = new EnumDefinition(enumName);
+
+        String enumLine;
+        while ((enumLine = reader.readLine()) != null) {
+            enumLine = enumLine.trim();
+
+            // Detener la lectura cuando se encuentra "}"
+            if (enumLine.equals("}")) {
+                break;
+            }
+
+            // Divide la línea por comas y agrega cada valor individualmente
+            if (!enumLine.isEmpty()) {
+                String[] values = enumLine.replace(",", "").split("\\s+");
+                for (String value : values) {
+                    if (!value.isEmpty()) {
+                        enumDefinition.values.add(value.trim());
+                    }
+                }
+            }
+        }
+
+        enums.put(enumName, enumDefinition); // Agrega el enum al mapa de enums
+    }
     public Map<String, EntityDefinition> getEntities() {
         return entities;
     }
 
+    public Map<String, EnumDefinition> getEnums() {
+        return enums;
+    }
+
+    // Clase para definir las entidades
     public static class EntityDefinition {
         public final String name;
         public final Map<String, String> attributes = new HashMap<>();
@@ -101,6 +132,7 @@ public class JdlParser {
         }
     }
 
+    // Clase para definir las relaciones entre entidades
     public static class EntityRelationship {
         public final String fromEntity;
         public final String toEntity;
@@ -118,6 +150,16 @@ public class JdlParser {
             this.toAttribute = toAttribute;
             this.fromAttributeKey = fromAttributeKey;
             this.toAttributeKey = toAttributeKey;
+        }
+    }
+
+    // Clase para definir un Enum
+    public static class EnumDefinition {
+        public final String name;
+        public final List<String> values = new ArrayList<>();
+
+        public EnumDefinition(String name) {
+            this.name = name;
         }
     }
 }
