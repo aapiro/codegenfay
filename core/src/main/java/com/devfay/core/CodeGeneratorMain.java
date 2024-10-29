@@ -20,7 +20,7 @@ public class CodeGeneratorMain {
             Map<String, JdlParser.EntityDefinition> entities = parser.getEntities();
 
             // 2. Crear una instancia de CodeGenerator
-            CodeGenerator generator = new CodeGenerator(templateDir);
+            CodeGenerator generator = new CodeGenerator();
 
             // 3. Generar el código para cada entidad
             generator.generateCode(entities, outputDir, packageName, templateDir);
